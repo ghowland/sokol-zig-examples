@@ -77,7 +77,7 @@ fn buildDefault(
         ) },
     );
     exe.root_module.addImport("c", sokol_module);
-    try addImports(b, target, exe, null);
+    try addImports(b, target, exe, null, optimize);
     if (include_run_step) {
         const run_cmd = b.addRunArtifact(exe);
         const run_step = b.step("run", "Run the app");
@@ -117,7 +117,7 @@ fn buildWeb(
 
     const emsdk = b.dependency("emsdk", .{});
     game.root_module.addImport("c", sokol_module);
-    try addImports(b, target, game, emsdk);
+    try addImports(b, target, game, emsdk, optimize);
     // create a build step which invokes the Emscripten linker
     // const emsdk = dep_sokol.builder.dependency("emsdk", .{});
     const link_step = try emscripten.emLinkStep(b, .{
@@ -166,11 +166,11 @@ fn buildSokolModule(b: *std.Build, target: Build.ResolvedTarget, optimize: Optim
     } else null;
 
     const c_flags = if (target.result.os.tag == .macos)
-        &[_][]const u8{ "-std=c99", "-ObjC", "-fobjc-arc", render_backend_flag }
+        &[_][]const u8{ "-std=gnu99", "-ObjC", "-fobjc-arc", render_backend_flag }
     else if (target.result.os.tag == .emscripten)
-        &[_][]const u8{ "-std=c99", render_backend_flag, emscripten_sys_include.?, "-fno-sanitize=undefined" }
+        &[_][]const u8{ "-std=gnu99", render_backend_flag, emscripten_sys_include.?, "-fno-sanitize=undefined" }
     else
-        &[_][]const u8{ "-std=c99", render_backend_flag };
+        &[_][]const u8{ "-std=gnu99", render_backend_flag };
 
     sokol_module.addCSourceFile(.{ .file = .{ .src_path = .{ .owner = b, .sub_path = "src/compile_sokol.c" } }, .flags = c_flags });
 
@@ -187,10 +187,30 @@ fn buildSokolModule(b: *std.Build, target: Build.ResolvedTarget, optimize: Optim
     return sokol_module;
 }
 
-fn addImports(b: *std.Build, target: Build.ResolvedTarget, exe: *Step.Compile, emsdk_maybe: ?*Build.Dependency) !void {
+fn addImports(
+    b: *std.Build,
+    target: Build.ResolvedTarget,
+    exe: *Step.Compile,
+    emsdk_maybe: ?*Build.Dependency,
+    optimize: OptimizeMode,
+) !void {
     exe.addIncludePath(b.path("src/"));
 
     exe.linkLibC();
+
+    const sqlite_module = b.createModule(.{
+        .root_source_file = b.path("libs/zqlite/src/zqlite.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("zqlite", sqlite_module);
+    sqlite_module.addIncludePath(b.path("libs/zqlite/lib"));
+    sqlite_module.addCSourceFile(.{
+        .file = b.path("libs/zqlite/lib/sqlite3.c"),
+        .flags = &.{"-std=c99"},
+    });
+
+    sqlite_module.addSystemIncludePath(emscripten.emSdkLazyPath(b, emsdk_maybe.?, &.{ "upstream", "emscripten", "cache", "sysroot", "include" }));
 
     switch (target.result.os.tag) {
         .windows => {
@@ -215,6 +235,16 @@ fn addImports(b: *std.Build, target: Build.ResolvedTarget, exe: *Step.Compile, e
         .emscripten => {
             const emsdk = emsdk_maybe.?;
             const opt_emsdk_setup_step = try emscripten.emSdkSetupStep(b, emsdk);
+
+            // add sysroot build step
+            const embuilder_sysroot_step = emscripten.emBuilderStep(b, .{
+                .port_name = "sysroot",
+                .emsdk = emsdk,
+            });
+            if (opt_emsdk_setup_step) |emsdk_setup_step| {
+                embuilder_sysroot_step.step.dependOn(&emsdk_setup_step.step);
+            }
+            exe.step.dependOn(&embuilder_sysroot_step.step);
 
             // for WebGPU, need to run embuilder for `emdawnwebgpu` after emsdk setup and before C library build
             const use_webgpu = true;
