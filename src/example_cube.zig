@@ -28,12 +28,6 @@ export fn init() void {
 
     db = sqlite.open("resources/sql/test.db", sqlite.OpenFlags.ReadOnly) catch unreachable;
 
-    var rows = db.rows("select * from test order by name", .{}) catch unreachable;
-    defer rows.deinit();
-    while (rows.next()) |row| {
-        std.debug.print("name: {s}\n", .{row.text(0)});
-    }
-
     state.pass_action.colors[0].load_action = c.SG_LOADACTION_CLEAR;
     state.pass_action.colors[0].clear_value = c.sg_color{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 };
     const vertices = [_]f32{
@@ -122,6 +116,12 @@ export fn update() void {
     var vs_params = c.cube_vs_params_t{
         .mvp = mvp.toArray(),
     };
+
+    var rows = db.rows("select * from test order by name", .{}) catch unreachable;
+    defer rows.deinit();
+    while (rows.next()) |row| {
+        std.debug.print("name: {s}\n", .{row.text(1)});
+    }
 
     c.sg_begin_pass(&(c.sg_pass){ .action = state.pass_action, .swapchain = c.sglue_swapchain() });
     c.sg_apply_pipeline(state.main_pipeline);
