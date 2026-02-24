@@ -17,6 +17,8 @@ var rx: f32 = 0.0;
 var ry: f32 = 0.0;
 var state: State = std.mem.zeroes(State);
 
+var db: sqlite.Conn = undefined;
+
 export fn init() void {
     var desc = std.mem.zeroes(c.sg_desc);
     desc.environment = c.sglue_environment();
@@ -24,7 +26,7 @@ export fn init() void {
 
     c.stm_setup();
 
-    const db: sqlite.Conn = sqlite.open("resources/sql/test.db", sqlite.OpenFlags.ReadOnly) catch unreachable;
+    db = sqlite.open("resources/sql/test.db", sqlite.OpenFlags.ReadOnly) catch unreachable;
 
     var rows = db.rows("select * from test order by name", .{}) catch unreachable;
     defer rows.deinit();
