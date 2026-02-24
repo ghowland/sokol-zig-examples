@@ -3,6 +3,8 @@ const c = @import("c");
 const Mat4 = @import("math3d.zig").Mat4;
 const Vec3 = @import("math3d.zig").Vec3;
 
+const sqlite = @import("zqlite");
+
 const SampleCount = 4;
 
 const State = struct {
@@ -21,6 +23,9 @@ export fn init() void {
     c.sg_setup(&desc);
 
     c.stm_setup();
+
+    const db: sqlite.Conn = sqlite.open("resources/sql/test.db", sqlite.OpenFlags.ReadOnly) catch unreachable;
+    _ = db;
 
     state.pass_action.colors[0].load_action = c.SG_LOADACTION_CLEAR;
     state.pass_action.colors[0].clear_value = c.sg_color{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 };

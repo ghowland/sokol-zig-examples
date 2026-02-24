@@ -127,13 +127,13 @@ fn buildWeb(
         .emsdk = emsdk,
         .use_webgl2 = true,
         .use_emmalloc = true,
-        .use_filesystem = false,
         .shell_file_path = b.path("src/web/shell.html"),
+        .use_filesystem = true,
         .extra_args = &.{
-            // Allow memory growth
             "-sALLOW_MEMORY_GROWTH=1",
-            // 1 MB stack to match windows default
             "-sSTACK_SIZE= 1048576",
+            "--preload-file",
+            "resources@/resources",
         },
     });
     if (include_run_step) {
@@ -205,10 +205,7 @@ fn addImports(
     });
     exe.root_module.addImport("zqlite", sqlite_module);
     sqlite_module.addIncludePath(b.path("libs/zqlite/lib"));
-    sqlite_module.addCSourceFile(.{
-        .file = b.path("libs/zqlite/lib/sqlite3.c"),
-        .flags = &.{"-std=c99"},
-    });
+    sqlite_module.addCSourceFile(.{ .file = b.path("libs/zqlite/lib/sqlite3.c"), .flags = &[_][]const u8{ "-std=gnu99", "-fno-sanitize=undefined" } });
 
     sqlite_module.addSystemIncludePath(emscripten.emSdkLazyPath(b, emsdk_maybe.?, &.{ "upstream", "emscripten", "cache", "sysroot", "include" }));
 
